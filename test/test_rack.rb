@@ -4,12 +4,12 @@ require 'helper'
 class TestRack < MiniTest::Test
   @send_body = false
 
-  def app
+  def app(mashape_options = {})
     app = proc do
       sleep 0.05
       [200, {'CONTENT-TYPE' => 'application/json'}, ['{"messages": "Test Response"}']]
     end
-    stack = MashapeAnalytics::Frameworks::Rack.new app, service_token: 'SERVICE-TOKEN', host: @@host, send_body: @send_body
+    stack = MashapeAnalytics::Frameworks::Rack.new app, { service_token: 'SERVICE-TOKEN', host: @@host, send_body: @send_body }.merge(mashape_options)
     Rack::MockRequest.new(stack)
   end
 
@@ -32,6 +32,22 @@ class TestRack < MiniTest::Test
     MashapeAnalytics::Capture.disconnect
     @zmq_pull.close if @zmq_pull != nil
     @send_body = false
+  end
+
+  should 'only senf ALF if request path starts with prefix' do
+    app(path_prefix: '/api/').get('/get?foo=bar&empty', {'HTTP_ACCEPT' => 'application/json'})
+
+    assert_raises Timeout::Error do
+      Timeout.timeout(1) do
+        assert !@zmq_pull.recv
+      end
+    end
+
+    app(path_prefix: '/api/').get('/api/v1/get?foo=bar&empty', {'HTTP_ACCEPT' => 'application/json'})
+
+    Timeout.timeout(1) do
+      assert @zmq_pull.recv
+    end
   end
 
   should 'send ALF on GET /get?foo=bar&empty request' do

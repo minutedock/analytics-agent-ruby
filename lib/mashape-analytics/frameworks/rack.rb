@@ -19,12 +19,17 @@ module MashapeAnalytics::Frameworks
       @service_token = options[:service_token]
       @environment = options[:environment] || ''
       @send_body = options[:send_body] || false
+      @path_prefix = options[:path_prefix]
       host = options[:host] || 'tcp://socket.analytics.mashape.com:5500'
 
       MashapeAnalytics::Capture.setOptions(host: host)
     end
 
     def call(env)
+      if @path_prefix && !env['PATH_INFO'].start_with?(@path_prefix)
+        return @app.call(env)
+      end
+
       startedDateTime = Time.now
       status, headers, body = @app.call(env)
 
